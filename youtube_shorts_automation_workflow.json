@@ -1,5 +1,5 @@
 {
-  "name": "YouTube Shorts Auto Pipeline (Idea → Script → Images → VO → Draft Package)",
+  "name": "YouTube Shorts Auto Pipeline (Idea \u2192 Script \u2192 Images \u2192 VO \u2192 Draft Package)",
   "nodes": [
     {
       "parameters": {
@@ -37,23 +37,31 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+              "value": "=Bearer {{$env.OPENROUTER_API_KEY}}"
             },
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "https://github.com/ydeven757/youtube-channel"
+            },
+            {
+              "name": "X-Title",
+              "value": "YouTube Shorts Automation"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"gpt-4.1-mini\",\n  \"response_format\": {\"type\": \"json_object\"},\n  \"messages\": [\n    {\"role\":\"system\",\"content\":\"You create YouTube Shorts production JSON. Return strict JSON only.\"},\n    {\"role\":\"user\",\"content\":\"Topic: {{$json.topic}}\\nNiche: {{$json.niche}}\\nStyle: {{$json.style}}\\nTarget length: {{$json.targetSeconds}}s\\nReturn JSON with keys: title_options (3), description, hashtags (array max 5), voiceover_script, scene_prompts (array of 8 concise visual prompts), subtitle_lines (array).\"}\n  ]\n}"
+        "jsonBody": "={\n  \"model\": \"openai/gpt-4o-mini\",\n  \"response_format\": {\"type\": \"json_object\"},\n  \"messages\": [\n    {\"role\":\"system\",\"content\":\"You create YouTube Shorts production JSON. Return strict JSON only.\"},\n    {\"role\":\"user\",\"content\":\"Topic: {{$json.topic}}\\nNiche: {{$json.niche}}\\nStyle: {{$json.style}}\\nTarget length: {{$json.targetSeconds}}s\\nReturn JSON with keys: title_options (3), description, hashtags (array max 5), voiceover_script, scene_prompts (array of 8 concise visual prompts), subtitle_lines (array).\"}\n  ]\n}"
       },
       "id": "gen_script",
       "name": "Generate Script Package",

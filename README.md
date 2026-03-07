@@ -10,9 +10,13 @@ n8n workflows for YouTube Shorts automation.
 In n8n: **Workflows → Import from file** and select the JSON.
 
 ## Required env vars (v2)
-- `OPENAI_API_KEY`
+- `OPENROUTER_API_KEY`
 - `REPLICATE_API_TOKEN`
 - `ELEVENLABS_API_KEY`
 - `ELEVENLABS_VOICE_ID`
 - `TELEGRAM_CHAT_ID`
 - `YOUTUBE_UPLOAD_WEBHOOK_URL` (your uploader endpoint)
+
+## Notes
+- Workflows now use **OpenRouter** for script generation (`openai/gpt-4o-mini` by default).
+- No Blotato dependency in v2; rendering is done with `ffmpeg`.

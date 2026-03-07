@@ -45,23 +45,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+              "value": "=Bearer {{$env.OPENROUTER_API_KEY}}"
             },
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "https://github.com/ydeven757/youtube-channel"
+            },
+            {
+              "name": "X-Title",
+              "value": "YouTube Shorts Automation"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\"model\":\"gpt-4.1-mini\",\"response_format\":{\"type\":\"json_object\"},\"messages\":[{\"role\":\"system\",\"content\":\"You create high-retention YouTube Shorts production JSON. Return strict JSON only.\"},{\"role\":\"user\",\"content\":\"You are writing YouTube Shorts scripts for a 3D history animation channel.\\n\\nGoal: maximize retention and shares.\\nNiche: military history, empire collapse, historical what-if, myth vs reality.\\nTopic: {{$json.topic}}\\nTarget length: {{$json.targetSeconds}}s\\nVisual style: {{$json.style}}\\n\\nRules:\\n- First line must trigger curiosity/tension in < 12 words.\\n- No generic intros.\\n- Hook must imply a surprising consequence.\\n- Script length: 75\u2013110 words total for ~25\u201335s delivery.\\n- Structure: Hook (0-2s), setup, twist/reveal, why it mattered, CTA.\\n- Tone: cinematic, confident, sharp.\\n\\nCreate 8 hook variants using these categories:\\n1) One decision changed everything\\n2) Myth vs reality\\n3) What if this never happened\\n4) Tactical mistake\\n5) Last 24 hours\\n6) Hidden cause\\n7) Domino effect\\n8) Brutal irony\\n\\nReturn strict JSON keys only:\\ntitle_options (3), description, hashtags (array max 5), voiceover_script, scene_prompts (array of 8 concise visual prompts), subtitle_lines (array), hook_variants (array of 8).\"}]}"
+        "jsonBody": "={\"model\":\"openai/gpt-4o-mini\",\"response_format\":{\"type\":\"json_object\"},\"messages\":[{\"role\":\"system\",\"content\":\"You create high-retention YouTube Shorts production JSON. Return strict JSON only.\"},{\"role\":\"user\",\"content\":\"You are writing YouTube Shorts scripts for a 3D history animation channel.\\n\\nGoal: maximize retention and shares.\\nNiche: military history, empire collapse, historical what-if, myth vs reality.\\nTopic: {{$json.topic}}\\nTarget length: {{$json.targetSeconds}}s\\nVisual style: {{$json.style}}\\n\\nRules:\\n- First line must trigger curiosity/tension in < 12 words.\\n- No generic intros.\\n- Hook must imply a surprising consequence.\\n- Script length: 75\u2013110 words total for ~25\u201335s delivery.\\n- Structure: Hook (0-2s), setup, twist/reveal, why it mattered, CTA.\\n- Tone: cinematic, confident, sharp.\\n\\nCreate 8 hook variants using these categories:\\n1) One decision changed everything\\n2) Myth vs reality\\n3) What if this never happened\\n4) Tactical mistake\\n5) Last 24 hours\\n6) Hidden cause\\n7) Domino effect\\n8) Brutal irony\\n\\nReturn strict JSON keys only:\\ntitle_options (3), description, hashtags (array max 5), voiceover_script, scene_prompts (array of 8 concise visual prompts), subtitle_lines (array), hook_variants (array of 8).\"}]}"
       }
     },
     {
