@@ -1,0 +1,287 @@
+{
+  "name": "YouTube Shorts Auto Pipeline (Idea → Script → Images → VO → Draft Package)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron_daily",
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{topic:'How Rome Actually Fell', niche:'3D history animation', targetSeconds:30, style:'realistic cinematic 3D'}}];"
+      },
+      "id": "seed_topic",
+      "name": "Seed Topic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        430,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4.1-mini\",\n  \"response_format\": {\"type\": \"json_object\"},\n  \"messages\": [\n    {\"role\":\"system\",\"content\":\"You create YouTube Shorts production JSON. Return strict JSON only.\"},\n    {\"role\":\"user\",\"content\":\"Topic: {{$json.topic}}\\nNiche: {{$json.niche}}\\nStyle: {{$json.style}}\\nTarget length: {{$json.targetSeconds}}s\\nReturn JSON with keys: title_options (3), description, hashtags (array max 5), voiceover_script, scene_prompts (array of 8 concise visual prompts), subtitle_lines (array).\"}\n  ]\n}"
+      },
+      "id": "gen_script",
+      "name": "Generate Script Package",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.choices?.[0]?.message?.content || '{}';\nconst pkg = JSON.parse(raw);\nreturn [{json: pkg}];"
+      },
+      "id": "parse_script",
+      "name": "Parse Script JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/{{$env.ELEVENLABS_VOICE_ID}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "={{$env.ELEVENLABS_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"text\": $json.voiceover_script, \"model_id\": \"eleven_multilingual_v2\"}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "tts",
+      "name": "Generate Voiceover",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1250,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/shorts/{{Date.now()}}/voiceover.mp3",
+        "options": {}
+      },
+      "id": "save_vo",
+      "name": "Save Voiceover",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1510,
+        210
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out=[];\nfor (const [i,p] of ($json.scene_prompts||[]).entries()) out.push({json:{idx:i+1,prompt:p}});\nreturn out;"
+      },
+      "id": "split_prompts",
+      "name": "Split Scene Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        390
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.replicate.com/v1/predictions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Token {{$env.REPLICATE_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"version\": \"black-forest-labs/flux-schnell\", \"input\": {\"prompt\": $json.prompt + ', 9:16 vertical, cinematic 3D historical render', \"aspect_ratio\": \"9:16\"}}"
+      },
+      "id": "gen_image",
+      "name": "Generate Scene Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1510,
+        390
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build a draft package for human assembly in Blotato/CapCut\n// (image polling/download can be added next)\nreturn [{json:{\n  title_options:$items('Parse Script JSON')[0].json.title_options,\n  description:$items('Parse Script JSON')[0].json.description,\n  hashtags:$items('Parse Script JSON')[0].json.hashtags,\n  voiceover_script:$items('Parse Script JSON')[0].json.voiceover_script,\n  subtitle_lines:$items('Parse Script JSON')[0].json.subtitle_lines,\n  scene_prompts:$items('Parse Script JSON')[0].json.scene_prompts,\n  note:'Voiceover saved. Scene image generation requests sent. Add polling + download nodes for full automation.'\n}}];"
+      },
+      "id": "draft_package",
+      "name": "Build Draft Package",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1770,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Daily Trigger": {
+      "main": [
+        [
+          {
+            "node": "Seed Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seed Topic": {
+      "main": [
+        [
+          {
+            "node": "Generate Script Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Script Package": {
+      "main": [
+        [
+          {
+            "node": "Parse Script JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Script JSON": {
+      "main": [
+        [
+          {
+            "node": "Generate Voiceover",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Scene Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Voiceover": {
+      "main": [
+        [
+          {
+            "node": "Save Voiceover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Scene Prompts": {
+      "main": [
+        [
+          {
+            "node": "Generate Scene Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Voiceover": {
+      "main": [
+        [
+          {
+            "node": "Build Draft Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Scene Image": {
+      "main": [
+        [
+          {
+            "node": "Build Draft Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
