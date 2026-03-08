@@ -1,0 +1,687 @@
+{
+  "name": "YouTube Shorts Auto Pipeline v3 (No ENV, edit keys in Config node)",
+  "nodes": [
+    {
+      "id": "cron_daily",
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        140,
+        320
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "seed_topic",
+      "name": "Config + Topic (Edit Once)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        320
+      ],
+      "parameters": {
+        "jsCode": "return [{json:{\ntopic:'How Rome Actually Fell',\nniche:'3D history animation',\ntargetSeconds:30,\nstyle:'realistic cinematic 3D',\nrunId:Date.now().toString(),\nOPENROUTER_API_KEY:'PASTE_OPENROUTER_KEY',\nREPLICATE_API_TOKEN:'PASTE_REPLICATE_TOKEN',\nELEVENLABS_API_KEY:'PASTE_ELEVENLABS_KEY',\nELEVENLABS_VOICE_ID:'PASTE_ELEVENLABS_VOICE_ID',\nRENDER_API_URL:'https://your-render-service/render',\nTELEGRAM_CHAT_ID:'PASTE_TELEGRAM_CHAT_ID',\nBLOTATO_API_KEY:'PASTE_BLOTATO_API_KEY',\nBLOTATO_ACCOUNT_ID:'PASTE_BLOTATO_ACCOUNT_ID'\n}}];"
+      }
+    },
+    {
+      "id": "gen_script",
+      "name": "Generate Script Package",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        620,
+        320
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$json.OPENROUTER_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "https://github.com/ydeven757/youtube-channel"
+            },
+            {
+              "name": "X-Title",
+              "value": "YouTube Shorts Automation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\":\"openai/gpt-4o-mini\",\"response_format\":{\"type\":\"json_object\"},\"messages\":[{\"role\":\"system\",\"content\":\"You create high-retention YouTube Shorts production JSON. Return strict JSON only.\"},{\"role\":\"user\",\"content\":\"You are writing YouTube Shorts scripts for a 3D history animation channel.\\n\\nGoal: maximize retention and shares.\\nNiche: military history, empire collapse, historical what-if, myth vs reality.\\nTopic: {{$json.topic}}\\nTarget length: {{$json.targetSeconds}}s\\nVisual style: {{$json.style}}\\n\\nRules:\\n- First line must trigger curiosity/tension in < 12 words.\\n- No generic intros.\\n- Hook must imply a surprising consequence.\\n- Script length: 75\u2013110 words total for ~25\u201335s delivery.\\n- Structure: Hook (0-2s), setup, twist/reveal, why it mattered, CTA.\\n- Tone: cinematic, confident, sharp.\\n\\nCreate 8 hook variants using these categories:\\n1) One decision changed everything\\n2) Myth vs reality\\n3) What if this never happened\\n4) Tactical mistake\\n5) Last 24 hours\\n6) Hidden cause\\n7) Domino effect\\n8) Brutal irony\\n\\nReturn strict JSON keys only:\\ntitle_options (3), description, hashtags (array max 5), voiceover_script, scene_prompts (array of 8 concise visual prompts), subtitle_lines (array), hook_variants (array of 8).\"}]}"
+      }
+    },
+    {
+      "id": "parse_pkg",
+      "name": "Parse Script JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        320
+      ],
+      "parameters": {
+        "jsCode": "const raw=$json.choices?.[0]?.message?.content||'{}';\nconst pkg=JSON.parse(raw);\nconst cfg=$items('Config + Topic (Edit Once)')[0].json;\nObject.assign(pkg,{runId:cfg.runId,OPENROUTER_API_KEY:cfg.OPENROUTER_API_KEY,REPLICATE_API_TOKEN:cfg.REPLICATE_API_TOKEN,ELEVENLABS_API_KEY:cfg.ELEVENLABS_API_KEY,ELEVENLABS_VOICE_ID:cfg.ELEVENLABS_VOICE_ID,RENDER_API_URL:cfg.RENDER_API_URL,TELEGRAM_CHAT_ID:cfg.TELEGRAM_CHAT_ID,BLOTATO_API_KEY:cfg.BLOTATO_API_KEY,BLOTATO_ACCOUNT_ID:cfg.BLOTATO_ACCOUNT_ID});\nreturn [{json:pkg}];"
+      }
+    },
+    {
+      "id": "split_scenes",
+      "name": "Split Scene Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        460
+      ],
+      "parameters": {
+        "jsCode": "return ($json.scene_prompts||[]).map((p,i)=>({json:{idx:i+1,prompt:p,runId:$json.runId}}));"
+      }
+    },
+    {
+      "id": "replicate_create",
+      "name": "Create Image Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1290,
+        460
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.replicate.com/v1/predictions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Token {{$json.REPLICATE_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"version\":\"black-forest-labs/flux-schnell\",\"input\":{\"prompt\":$json.prompt + ', vertical 9:16, cinematic 3D historical render',\"aspect_ratio\":\"9:16\"}}"
+      }
+    },
+    {
+      "id": "wait_poll",
+      "name": "Wait 8s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1500,
+        460
+      ],
+      "parameters": {
+        "amount": 8,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "replicate_get",
+      "name": "Poll Image Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        460
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.replicate.com/v1/predictions/{{$json.id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Token {{$json.REPLICATE_API_TOKEN}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "if_done",
+      "name": "If Image Ready",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1900,
+        460
+      ],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.status}}",
+              "operation": "equal",
+              "value2": "succeeded"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "download_image",
+      "name": "Download Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2120,
+        390
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{Array.isArray($json.output)?$json.output[0]:$json.output}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "save_image",
+      "name": "Save Scene Image",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        2330,
+        390
+      ],
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/shorts/{{$json.runId}}/scene_{{$json.idx}}.png"
+      }
+    },
+    {
+      "id": "loop_back",
+      "name": "Retry Poll",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2120,
+        530
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "tts",
+      "name": "Generate Voiceover",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1080,
+        190
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/{{$json.ELEVENLABS_VOICE_ID}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "={{$json.ELEVENLABS_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"text\":$json.voiceover_script,\"model_id\":\"eleven_multilingual_v2\"}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "save_vo",
+      "name": "Save Voiceover",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1290,
+        190
+      ],
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/shorts/{{$json.runId}}/voiceover.mp3"
+      }
+    },
+    {
+      "id": "write_manifest",
+      "name": "Write Manifest JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        320
+      ],
+      "parameters": {
+        "jsCode": "const fs=require('fs');const path=`/data/shorts/${$json.runId}`;fs.mkdirSync(path,{recursive:true});fs.writeFileSync(`${path}/manifest.json`, JSON.stringify($json,null,2));return [{json:$json}];"
+      }
+    },
+    {
+      "id": "notify_approval",
+      "name": "Send Telegram Approval",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2760,
+        320
+      ],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{$json.TELEGRAM_CHAT_ID}}",
+        "text": "=Short ready: /data/shorts/{{$json.runId}}/out/short.mp4\nReply APPROVE {{$json.runId}} to publish."
+      }
+    },
+    {
+      "id": "wait_approval",
+      "name": "Wait for Approval Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        2970,
+        320
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shorts-approve",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "if_approve",
+      "name": "If Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3180,
+        320
+      ],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.body?.status || $json.status}}",
+              "operation": "equal",
+              "value2": "APPROVE"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "youtube_upload",
+      "name": "Publish via Blotato",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3400,
+        250
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://backend.blotato.com/v2/posts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "blotato-api-key",
+              "value": "={{$json.BLOTATO_API_KEY || $items(\"Parse Script JSON\")[0].json.BLOTATO_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"post\":{\"accountId\":($json.BLOTATO_ACCOUNT_ID || $items('Parse Script JSON')[0].json.BLOTATO_ACCOUNT_ID),\"content\":{\"text\":`${$items('Parse Script JSON')[0].json.title_options?.[0]}\\n\\n${$items('Parse Script JSON')[0].json.description}\\n\\n${($items('Parse Script JSON')[0].json.hashtags||[]).map(h=>h.startsWith('#')?h:'#'+h).join(' ')}`,\"mediaUrls\":[($json.publicVideoUrl || $json.videoUrl || $json.renderedUrl)],\"platform\":\"youtube\"},\"target\":{\"targetType\":\"youtube\"}}}"
+      }
+    },
+    {
+      "id": "notify_done",
+      "name": "Notify Published",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3620,
+        250
+      ],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{$items(\"Parse Script JSON\")[0].json.TELEGRAM_CHAT_ID}}",
+        "text": "=Published to YouTube via Blotato for run {{$items('Parse Script JSON')[0].json.runId}} \u2705"
+      }
+    },
+    {
+      "id": "notify_reject",
+      "name": "Notify Rejected",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3400,
+        390
+      ],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{$items(\"Parse Script JSON\")[0].json.TELEGRAM_CHAT_ID}}",
+        "text": "=Run rejected. No upload."
+      }
+    },
+    {
+      "id": "render_video_api",
+      "name": "Render Video API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2550,
+        320
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.RENDER_API_URL}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"runId\":$items('Parse Script JSON')[0].json.runId,\"voiceoverPath\":`/data/shorts/${$items('Parse Script JSON')[0].json.runId}/voiceover.mp3`,\"imagesGlob\":`/data/shorts/${$items('Parse Script JSON')[0].json.runId}/scene_*.png`,\"outputPath\":`/data/shorts/${$items('Parse Script JSON')[0].json.runId}/out/short.mp4`,\"title\":$items('Parse Script JSON')[0].json.title_options?.[0],\"subtitleLines\":$items('Parse Script JSON')[0].json.subtitle_lines}"
+      }
+    }
+  ],
+  "connections": {
+    "Daily Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config + Topic (Edit Once)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Script Package": {
+      "main": [
+        [
+          {
+            "node": "Parse Script JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Script JSON": {
+      "main": [
+        [
+          {
+            "node": "Generate Voiceover",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Scene Prompts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Write Manifest JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Voiceover": {
+      "main": [
+        [
+          {
+            "node": "Save Voiceover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Scene Prompts": {
+      "main": [
+        [
+          {
+            "node": "Create Image Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Image Job": {
+      "main": [
+        [
+          {
+            "node": "Wait 8s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 8s": {
+      "main": [
+        [
+          {
+            "node": "Poll Image Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Image Job": {
+      "main": [
+        [
+          {
+            "node": "If Image Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Image Ready": {
+      "main": [
+        [
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retry Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "Save Scene Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Poll": {
+      "main": [
+        [
+          {
+            "node": "Wait 8s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Voiceover": {
+      "main": [
+        [
+          {
+            "node": "Render Video API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Scene Image": {
+      "main": [
+        [
+          {
+            "node": "Render Video API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Manifest JSON": {
+      "main": [
+        [
+          {
+            "node": "Render Video API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Approval": {
+      "main": [
+        [
+          {
+            "node": "Wait for Approval Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Approval Webhook": {
+      "main": [
+        [
+          {
+            "node": "If Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Approved": {
+      "main": [
+        [
+          {
+            "node": "Publish via Blotato",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render Video API": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish via Blotato": {
+      "main": [
+        [
+          {
+            "node": "Notify Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config + Topic (Edit Once)": {
+      "main": [
+        [
+          {
+            "node": "Generate Script Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
